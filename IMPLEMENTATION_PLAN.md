@@ -136,10 +136,10 @@ mPyCloud/
 ### 2.1 Configuration & Utilities
 
 **Tasks:**
-- [ ] Implement settings.py with environment variables
-- [ ] Create logger utility
-- [ ] Create response formatter utility
-- [ ] Implement input validators
+- [x] Implement settings.py with environment variables
+- [x] Create logger utility
+- [x] Create response formatter utility
+- [x] Implement input validators
 - [ ] Create error handler decorator
 
 **Files:**
@@ -170,11 +170,11 @@ mPyCloud/
 ### 2.2 Data Models
 
 **Tasks:**
-- [ ] Define ImageMetadata class
-- [ ] Implement to_dynamodb() method
-- [ ] Implement from_dynamodb() method
-- [ ] Add validation methods
-- [ ] Create factory methods
+- [x] Define ImageMetadata class
+- [x] Implement to_dynamodb() method
+- [x] Implement from_dynamodb() method
+- [x] Add validation methods
+- [x] Create factory methods
 
 **Files:**
 - `src/models/image_metadata.py`
@@ -213,13 +213,13 @@ class ImageMetadata:
 ### 2.3 S3 Service Layer
 
 **Tasks:**
-- [ ] Implement S3Service class
-- [ ] upload_image() method
-- [ ] generate_presigned_upload_url() method
-- [ ] generate_presigned_download_url() method
-- [ ] delete_image() method
-- [ ] check_image_exists() method
-- [ ] Add error handling
+- [x] Implement S3Service class
+- [x] upload_image() method
+- [x] generate_presigned_upload_url() method
+- [x] generate_presigned_download_url() method
+- [x] delete_image() method
+- [x] check_image_exists() method
+- [x] Add error handling
 - [ ] Write unit tests
 
 **Files:**
@@ -246,14 +246,14 @@ class S3Service:
 ### 2.4 DynamoDB Service Layer
 
 **Tasks:**
-- [ ] Implement DynamoDBService class
-- [ ] save_metadata() method
-- [ ] get_metadata() method
-- [ ] query_by_user() method
-- [ ] query_with_filters() method
-- [ ] update_metadata() method
-- [ ] delete_metadata() method
-- [ ] Add pagination support
+- [x] Implement DynamoDBService class
+- [x] save_metadata() method
+- [x] get_metadata() method
+- [x] query_by_user() method
+- [x] query_with_filters() method
+- [x] update_metadata() method
+- [x] delete_metadata() method
+- [x] Add pagination support
 - [ ] Write unit tests
 
 **Files:**
@@ -282,11 +282,9 @@ class DynamoDBService:
 ### 2.5 Image Service (Business Logic)
 
 **Tasks:**
-- [ ] Implement ImageService orchestration layer
-- [ ] Coordinate S3 and DynamoDB operations
-- [ ] Add transaction-like behavior (rollback on failures)
-- [ ] Implement image processing utilities
-- [ ] Add metadata extraction (PIL for dimensions)
+- [x] Implement ImageService orchestration layer
+- [x] Coordinate S3 and DynamoDB operations
+- [x] Add transaction-like behavior (rollback on failures)
 - [ ] Write unit tests
 
 **Files:**
@@ -295,13 +293,14 @@ class DynamoDBService:
 **Methods:**
 ```python
 class ImageService:
-    - upload_image_with_metadata(image_data, metadata_dict)
-    - get_image_metadata(image_id)
-    - list_images(filters, pagination)
-    - get_image_download_url(image_id)
-    - delete_image(image_id)
-    - extract_image_info(image_data) # dimensions, format
-    - generate_s3_key(user_id, filename) # consistent naming
+    - upload_image(file_content, user_id, filename, content_type, tags, description)
+    - get_image(image_id, user_id)
+    - get_image_metadata(image_id, user_id)
+    - list_user_images(user_id, status, limit, last_evaluated_key)
+    - search_images(user_id, tags, content_type, status, min_size, max_size, limit)
+    - update_image_metadata(image_id, user_id, updates)
+    - delete_image(image_id, user_id, soft_delete)
+    - generate_presigned_url(image_id, user_id, expiry)
 ```
 
 **Deliverables:**
@@ -317,13 +316,11 @@ class ImageService:
 ### 3.1 Lambda Handler: Upload Image
 
 **Tasks:**
-- [ ] Implement upload_handler.py
-- [ ] Parse multipart/form-data
-- [ ] Extract image and metadata
-- [ ] Validate inputs
-- [ ] Call ImageService
-- [ ] Generate presigned URL (alternative approach)
-- [ ] Return success response
+- [x] Implement upload_handler.py
+- [x] Validate inputs
+- [x] Generate presigned URL
+- [x] Create DynamoDB entry with 'processing' status
+- [x] Return success response
 - [ ] Write unit tests
 
 **Files:**
@@ -332,17 +329,17 @@ class ImageService:
 **Handler Function:**
 ```python
 def lambda_handler(event, context):
-    # Parse request body (multipart)
-    # Validate image file
-    # Extract metadata
-    # Upload to S3
-    # Save to DynamoDB
-    # Return response
+    # Parse JSON request with metadata
+    # Validate metadata (filename, content_type, tags, etc.)
+    # Generate presigned S3 upload URL
+    # Create DynamoDB entry with 'processing' status
+    # Return presigned URL and image_id
 ```
 
 **Deliverables:**
-- Working upload handler
-- Support for direct upload and presigned URL approach
+- Working upload handler with presigned URL generation
+- DynamoDB entry creation with 'processing' status
+- Client receives URL for direct S3 upload
 - Unit tests
 
 ---
@@ -350,15 +347,15 @@ def lambda_handler(event, context):
 ### 3.2 Lambda Handler: List Images
 
 **Tasks:**
-- [ ] Implement list_handler.py
-- [ ] Parse query parameters
-- [ ] Build DynamoDB query with filters
-- [ ] Support user_id filter
-- [ ] Support tags filter
-- [ ] Support content_type filter
-- [ ] Support date range filter
-- [ ] Implement pagination
-- [ ] Return formatted response
+- [x] Implement list_handler.py
+- [x] Parse query parameters
+- [x] Build DynamoDB query with filters
+- [x] Support user_id filter
+- [x] Support tags filter
+- [x] Support content_type filter
+- [x] Support date range filter
+- [x] Implement pagination
+- [x] Return formatted response
 - [ ] Write unit tests
 
 **Files:**
@@ -386,11 +383,11 @@ def lambda_handler(event, context):
 ### 3.3 Lambda Handler: Get Image Metadata
 
 **Tasks:**
-- [ ] Implement get_handler.py
-- [ ] Extract image_id from path parameters
-- [ ] Retrieve metadata from DynamoDB
-- [ ] Handle not found errors
-- [ ] Return formatted response
+- [x] Implement get_handler.py
+- [x] Extract image_id from path parameters
+- [x] Retrieve metadata from DynamoDB
+- [x] Handle not found errors
+- [x] Return formatted response
 - [ ] Write unit tests
 
 **Files:**
@@ -406,11 +403,11 @@ def lambda_handler(event, context):
 ### 3.4 Lambda Handler: Download Image
 
 **Tasks:**
-- [ ] Implement download_handler.py
-- [ ] Extract image_id from path parameters
-- [ ] Verify image exists in DynamoDB
-- [ ] Generate presigned S3 URL
-- [ ] Return presigned URL or redirect
+- [x] Implement download_handler.py
+- [x] Extract image_id from path parameters
+- [x] Verify image exists in DynamoDB
+- [x] Generate presigned S3 URL
+- [x] Return presigned URL or redirect
 - [ ] Write unit tests
 
 **Files:**
@@ -431,13 +428,13 @@ def lambda_handler(event, context):
 ### 3.5 Lambda Handler: Delete Image
 
 **Tasks:**
-- [ ] Implement delete_handler.py
-- [ ] Extract image_id from path parameters
-- [ ] Validate user ownership (if auth is implemented)
-- [ ] Delete from S3
-- [ ] Update/delete from DynamoDB (soft delete recommended)
-- [ ] Handle cascading delete failures
-- [ ] Return success response
+- [x] Implement delete_handler.py
+- [x] Extract image_id from path parameters
+- [x] Validate user ownership (if auth is implemented)
+- [x] Delete from S3
+- [x] Update/delete from DynamoDB (soft delete recommended)
+- [x] Handle cascading delete failures
+- [x] Return success response
 - [ ] Write unit tests
 
 **Files:**
@@ -457,11 +454,11 @@ def lambda_handler(event, context):
 ### 3.6 API Gateway Configuration
 
 **Tasks:**
-- [ ] Create template.yaml (AWS SAM)
-- [ ] Define API Gateway REST API
-- [ ] Configure Lambda integrations
-- [ ] Set up CORS
-- [ ] Define request/response models
+- [x] Create template.yaml (AWS SAM)
+- [x] Define API Gateway REST API
+- [x] Configure Lambda integrations
+- [x] Set up CORS
+- [x] Define request/response models
 - [ ] Configure method request validation
 - [ ] Test locally with SAM CLI
 
@@ -777,10 +774,6 @@ scripts/
    - Mitigation: Design GSIs carefully
    - Test with realistic data volumes
 
-4. **Multipart Form Parsing**
-   - Mitigation: Use python-multipart library
-   - Test with various clients
-
 ### Schedule Risks
 
 1. **Learning Curve (LocalStack)**
@@ -820,6 +813,59 @@ scripts/
 - ✅ No linting errors
 - ✅ Type hints present
 - ✅ Error handling robust
+
+---
+
+## Phase 6: Local Development Enhancements (Future)
+
+### 6.1 Code Quality Tools
+
+**Tasks:**
+- [ ] Configure Black code formatter
+- [ ] Setup Flake8 linting
+- [ ] Add MyPy type checking
+- [ ] Configure Pylint for comprehensive analysis
+- [ ] Setup pre-commit hooks
+
+**Dependencies:**
+```
+black>=23.0.0
+flake8>=6.0.0
+mypy>=1.0.0
+pylint>=2.17.0
+pre-commit>=3.0.0
+```
+
+**Configuration Files Needed:**
+- `.flake8` or `setup.cfg` - Flake8 configuration
+- `pyproject.toml` - Black and MyPy configuration
+- `.pre-commit-config.yaml` - Pre-commit hooks
+- `.pylintrc` - Pylint configuration
+
+**Benefits:**
+- Consistent code formatting across team
+- Catch bugs before runtime with static analysis
+- Enforce coding standards automatically
+- Improve code quality and maintainability
+
+**Usage:**
+```bash
+# Format code
+black src/ tests/
+
+# Lint code
+flake8 src/ tests/
+
+# Type checking
+mypy src/
+
+# Comprehensive analysis
+pylint src/
+
+# Setup pre-commit hooks
+pre-commit install
+pre-commit run --all-files
+```
 
 ---
 
@@ -867,7 +913,6 @@ scripts/
 
 ### Libraries
 - boto3 (AWS SDK)
-- python-multipart (form parsing)
-- Pillow (image processing)
+- Pillow (image validation - optional)
 - pytest (testing)
 - moto (AWS mocking)

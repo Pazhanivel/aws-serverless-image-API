@@ -28,14 +28,13 @@ class Settings:
     DYNAMODB_STATUS_INDEX: str = 'StatusIndex'
     
     # Image Validation
-    MAX_IMAGE_SIZE: int = int(os.getenv('MAX_IMAGE_SIZE', str(10 * 1024 * 1024)))  # 10 MB
-    ALLOWED_CONTENT_TYPES: list = [
-        'image/jpeg',
-        'image/jpg',
-        'image/png',
-        'image/gif',
-        'image/webp'
-    ]
+    # Support both MAX_IMAGE_SIZE and legacy MAX_FILE_SIZE env vars
+    MAX_IMAGE_SIZE: int = int(os.getenv('MAX_IMAGE_SIZE', os.getenv('MAX_FILE_SIZE', str(10 * 1024 * 1024))))  # 10 MB
+    # Allow overriding content types via ALLOWED_CONTENT_TYPES env (CSV)
+    ALLOWED_CONTENT_TYPES: list = [ct.strip() for ct in os.getenv(
+        'ALLOWED_CONTENT_TYPES',
+        'image/jpeg,image/jpg,image/png,image/gif,image/webp'
+    ).split(',') if ct.strip()]
     ALLOWED_EXTENSIONS: list = ['.jpg', '.jpeg', '.png', '.gif', '.webp']
     
     # Pagination
@@ -63,12 +62,20 @@ class Settings:
     @classmethod
     def get_s3_config(cls) -> dict:
         """Get S3 specific configuration"""
-        return cls.get_aws_config()
+        config = cls.get_aws_config()
+        config['bucket_name'] = cls.S3_BUCKET_NAME
+        config['presigned_url_expiry'] = cls.S3_PRESIGNED_URL_EXPIRATION
+        config['key_prefix'] = ''  # No prefix for now
+        return config
 
     @classmethod
     def get_dynamodb_config(cls) -> dict:
         """Get DynamoDB specific configuration"""
-        return cls.get_aws_config()
+        config = cls.get_aws_config()
+        config['table_name'] = cls.DYNAMODB_TABLE_NAME
+        config['user_index'] = cls.DYNAMODB_USER_INDEX
+        config['status_index'] = cls.DYNAMODB_STATUS_INDEX
+        return config
 
     @classmethod
     def validate_content_type(cls, content_type: str) -> bool:

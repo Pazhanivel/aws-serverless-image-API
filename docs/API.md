@@ -7,6 +7,8 @@
 **Protocol**: REST  
 **Content-Type**: `application/json` (except upload endpoint)
 
+**Status**: ✅ **Phase 3 Complete** - All 6 API endpoints implemented with handlers
+
 ---
 
 ## Table of Contents
@@ -19,6 +21,7 @@
    - [Get Image Metadata](#3-get-image-metadata)
    - [Download Image](#4-download-image)
    - [Delete Image](#5-delete-image)
+   - [Update Image Status](#6-update-image-status)
 4. [Data Models](#data-models)
 5. [Examples](#examples)
 6. [Rate Limits](#rate-limits)
@@ -136,13 +139,31 @@ Upload an image with associated metadata.
 
 ### Example Request (cURL)
 
+**Basic upload:**
 ```bash
 curl -X POST http://localhost:4566/dev/images \
-  -F "image=@/path/to/sunset.jpg" \
-  -F "user_id=user123" \
-  -F "description=Beautiful sunset at the beach" \
-  -F 'tags=["sunset", "beach", "nature"]' \
-  -F 'metadata={"location": "California", "camera": "Canon EOS R5"}'
+  -H "Content-Type: application/json" \
+  -H "User-Id: user123" \
+  -d '{
+    "filename": "sunset.jpg",
+    "content_type": "image/jpeg",
+    "description": "Beautiful sunset at the beach",
+    "tags": ["sunset", "beach", "nature"]
+  }'
+```
+
+**Upload with optional fields:**
+```bash
+curl -X POST http://localhost:4566/dev/images \
+  -H "Content-Type: application/json" \
+  -H "User-Id: user123" \
+  -d '{
+    "filename": "sunset.jpg",
+    "content_type": "image/jpeg",
+    "description": "Beautiful sunset",
+    "tags": ["sunset", "beach"],
+    "expiry": 1800
+  }'
 ```
 
 ### Example Request (Python)
@@ -268,35 +289,47 @@ Filters can be combined using AND logic:
 | `total_count` | Integer | Total images matching filters (estimate) |
 | `last_evaluated_key` | String | Pagination token (null if no more results) |
 
-### Example Requests
+### Example Requests (cURL)
 
 **List all images for a user:**
 ```bash
-curl "http://localhost:4566/dev/images?user_id=user123&limit=10"
+curl -X GET "http://localhost:4566/dev/images?limit=10" \
+  -H "User-Id: user123"
 ```
 
 **Filter by tags:**
 ```bash
-curl "http://localhost:4566/dev/images?user_id=user123&tags=sunset,nature"
+curl -X GET "http://localhost:4566/dev/images?tag=sunset" \
+  -H "User-Id: user123"
 ```
 
 **Filter by date range:**
 ```bash
-curl "http://localhost:4566/dev/images?user_id=user123&start_date=2025-12-01T00:00:00Z&end_date=2025-12-31T23:59:59Z"
+curl -X GET "http://localhost:4566/dev/images?start_date=2025-12-01T00:00:00Z&end_date=2025-12-31T23:59:59Z" \
+  -H "User-Id: user123"
 ```
 
 **Filter by content type:**
 ```bash
-curl "http://localhost:4566/dev/images?content_type=image/png"
+curl -X GET "http://localhost:4566/dev/images?content_type=image/png" \
+  -H "User-Id: user123"
 ```
 
 **Pagination:**
 ```bash
 # First page
-curl "http://localhost:4566/dev/images?user_id=user123&limit=50"
+curl -X GET "http://localhost:4566/dev/images?limit=50" \
+  -H "User-Id: user123"
 
-# Next page (use last_evaluated_key from previous response)
-curl "http://localhost:4566/dev/images?user_id=user123&limit=50&last_key=eyJpbWFnZV9pZCI6..."
+# Next page (use next_token from previous response)
+curl -X GET "http://localhost:4566/dev/images?limit=50&next_token=eyJpbWFnZV9pZCI6..." \
+  -H "User-Id: user123"
+```
+
+**Pretty print results:**
+```bash
+curl -s -X GET "http://localhost:4566/dev/images" \
+  -H "User-Id: user123" | jq '.data.items[] | {filename, size, status}'
 ```
 
 ### Example Request (Python)
@@ -380,10 +413,19 @@ Retrieve metadata for a specific image.
 }
 ```
 
-### Example Request
+### Example Requests (cURL)
 
+**Basic request:**
 ```bash
-curl http://localhost:4566/dev/images/550e8400-e29b-41d4-a716-446655440000
+curl -X GET http://localhost:4566/dev/images/550e8400-e29b-41d4-a716-446655440000 \
+  -H "User-Id: user123"
+```
+
+**With formatted output:**
+```bash
+curl -X GET http://localhost:4566/dev/images/550e8400-e29b-41d4-a716-446655440000 \
+  -H "User-Id: user123" \
+  -H "Accept: application/json" | jq .
 ```
 
 ### Example Request (Python)
@@ -456,26 +498,41 @@ Get a presigned URL to download or view the image.
 - Directly redirects to the presigned S3 URL
 - Browser can display or download the image immediately
 
-### Example Requests
+### Example Requests (cURL)
 
 **Get download URL:**
 ```bash
-curl http://localhost:4566/dev/images/550e8400-e29b-41d4-a716-446655440000/download
+curl -X GET http://localhost:4566/dev/images/550e8400-e29b-41d4-a716-446655440000/download \
+  -H "User-Id: user123"
 ```
 
 **Get URL with custom expiration:**
 ```bash
-curl "http://localhost:4566/dev/images/550e8400-e29b-41d4-a716-446655440000/download?expires_in=1800"
+curl -X GET "http://localhost:4566/dev/images/550e8400-e29b-41d4-a716-446655440000/download?expires_in=1800" \
+  -H "User-Id: user123"
 ```
 
 **Force download (not inline):**
 ```bash
-curl "http://localhost:4566/dev/images/550e8400-e29b-41d4-a716-446655440000/download?download=true"
+curl -X GET "http://localhost:4566/dev/images/550e8400-e29b-41d4-a716-446655440000/download?download=true" \
+  -H "User-Id: user123"
 ```
 
 **Direct download with redirect:**
 ```bash
-curl -L http://localhost:4566/dev/images/550e8400-e29b-41d4-a716-446655440000/download -o sunset.jpg
+curl -L -X GET http://localhost:4566/dev/images/550e8400-e29b-41d4-a716-446655440000/download \
+  -H "User-Id: user123" \
+  -o sunset.jpg
+```
+
+**Complete workflow - Get presigned URL and download:**
+```bash
+# Step 1: Get the presigned URL
+DOWNLOAD_URL=$(curl -s -X GET http://localhost:4566/dev/images/550e8400-e29b-41d4-a716-446655440000/download \
+  -H "User-Id: user123" | jq -r '.data.presigned_url')
+
+# Step 2: Download the file using the presigned URL
+curl -o image.jpg "$DOWNLOAD_URL"
 ```
 
 ### Example Request (Python)
@@ -561,16 +618,34 @@ Delete an image and its metadata.
 - Cannot be recovered
 - Use with caution
 
-### Example Requests
+### Example Requests (cURL)
 
 **Soft delete:**
 ```bash
-curl -X DELETE http://localhost:4566/dev/images/550e8400-e29b-41d4-a716-446655440000
+curl -X DELETE http://localhost:4566/dev/images/550e8400-e29b-41d4-a716-446655440000 \
+  -H "User-Id: user123"
 ```
 
 **Hard delete:**
 ```bash
-curl -X DELETE "http://localhost:4566/dev/images/550e8400-e29b-41d4-a716-446655440000?hard_delete=true"
+curl -X DELETE "http://localhost:4566/dev/images/550e8400-e29b-41d4-a716-446655440000?hard_delete=true" \
+  -H "User-Id: user123"
+```
+
+**Delete with verbose output:**
+```bash
+curl -v -X DELETE http://localhost:4566/dev/images/550e8400-e29b-41d4-a716-446655440000 \
+  -H "User-Id: user123"
+```
+
+**Bulk delete script:**
+```bash
+# Delete multiple images
+for image_id in img-id-1 img-id-2 img-id-3; do
+  curl -X DELETE "http://localhost:4566/dev/images/$image_id?hard_delete=true" \
+    -H "User-Id: user123"
+  echo "Deleted: $image_id"
+done
 ```
 
 ### Example Request (Python)
@@ -607,6 +682,188 @@ response = requests.delete(url, params={'hard_delete': True})
     "error": "FORBIDDEN",
     "message": "You do not have permission to delete this image",
     "request_id": "req-129"
+}
+```
+
+---
+
+## 6. Update Image Status
+
+Update the status of an image after uploading to S3 (typically to mark as 'active').
+
+### Request
+
+**Method**: `PATCH`  
+**Endpoint**: `/images/{image_id}`
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `image_id` | String (UUID) | Yes | Unique image identifier |
+
+### Request Body
+
+```json
+{
+    "status": "active",
+    "size": 1234567,
+    "width": 1920,
+    "height": 1080
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `status` | String | Yes | New status: "active", "processing", or "error" |
+| `size` | Number | No | File size in bytes (detected from S3 if not provided) |
+| `width` | Number | No | Image width in pixels |
+| `height` | Number | No | Image height in pixels |
+
+### Response
+
+**Status**: `200 OK`
+```json
+{
+    "image_id": "550e8400-e29b-41d4-a716-446655440000",
+    "status": "active",
+    "size": 1234567,
+    "width": 1920,
+    "height": 1080,
+    "message": "Image status updated successfully"
+}
+```
+
+### Usage Flow
+
+1. Client requests presigned URL: `POST /images`
+2. Client uploads file to S3 using presigned URL
+3. Client confirms upload: `PATCH /images/{image_id}` with `status=active`
+4. System verifies S3 file exists and updates metadata
+
+### Example Requests (cURL)
+
+**Basic status update:**
+```bash
+curl -X PATCH http://localhost:4566/dev/images/550e8400-e29b-41d4-a716-446655440000 \
+  -H "Content-Type: application/json" \
+  -H "User-Id: user123" \
+  -d '{"status": "active"}'
+```
+
+**With dimensions:**
+```bash
+curl -X PATCH http://localhost:4566/dev/images/550e8400-e29b-41d4-a716-446655440000 \
+  -H "Content-Type: application/json" \
+  -H "User-Id: user123" \
+  -d '{
+    "status": "active",
+    "size": 1234567,
+    "width": 1920,
+    "height": 1080
+  }'
+```
+
+**Mark as error status:**
+```bash
+curl -X PATCH http://localhost:4566/dev/images/550e8400-e29b-41d4-a716-446655440000 \
+  -H "Content-Type: application/json" \
+  -H "User-Id: user123" \
+  -d '{"status": "error"}'
+```
+
+**Complete upload workflow:**
+```bash
+# Step 1: Request presigned URL
+RESPONSE=$(curl -s -X POST http://localhost:4566/dev/images \
+  -H "Content-Type: application/json" \
+  -H "User-Id: user123" \
+  -d '{
+    "filename": "photo.jpg",
+    "content_type": "image/jpeg"
+  }')
+
+# Extract values
+IMAGE_ID=$(echo $RESPONSE | jq -r '.data.image_id')
+UPLOAD_URL=$(echo $RESPONSE | jq -r '.data.upload_url')
+
+# Step 2: Upload file to S3
+curl -X PUT "$UPLOAD_URL" \
+  -H "Content-Type: image/jpeg" \
+  --data-binary @photo.jpg
+
+# Step 3: Update status to active
+curl -X PATCH "http://localhost:4566/dev/images/$IMAGE_ID" \
+  -H "Content-Type: application/json" \
+  -H "User-Id: user123" \
+  -d '{
+    "status": "active",
+    "size": 1234567,
+    "width": 1920,
+    "height": 1080
+  }'
+```
+
+### Example Request (Python)
+
+```python
+import requests
+
+image_id = "550e8400-e29b-41d4-a716-446655440000"
+url = f"http://localhost:4566/dev/images/{image_id}"
+
+# After uploading to S3, mark as active
+response = requests.patch(
+    url,
+    headers={"User-Id": "user123"},
+    json={
+        "status": "active",
+        "size": 1234567,
+        "width": 1920,
+        "height": 1080
+    }
+)
+
+if response.status_code == 200:
+    print("Status updated successfully")
+    print(response.json())
+```
+
+### Error Responses
+
+**Image Not Found (404)**
+```json
+{
+    "error": "IMAGE_NOT_FOUND",
+    "message": "Image not found: 550e8400-e29b-41d4-a716-446655440000",
+    "request_id": "req-130"
+}
+```
+
+**Invalid Status (400)**
+```json
+{
+    "error": "VALIDATION_ERROR",
+    "message": "Invalid status. Must be one of: active, processing, error",
+    "request_id": "req-131"
+}
+```
+
+**S3 File Not Found (400)**
+```json
+{
+    "error": "FILE_NOT_FOUND",
+    "message": "Cannot set status to active: file not found in S3. Please upload the file first.",
+    "request_id": "req-132"
+}
+```
+
+**Cannot Update Deleted Image (409)**
+```json
+{
+    "error": "CONFLICT",
+    "message": "Cannot update status of deleted image",
+    "request_id": "req-133"
 }
 ```
 

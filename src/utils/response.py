@@ -3,7 +3,7 @@ Response formatter utility for standardized API responses.
 Provides consistent response structure across all Lambda handlers.
 """
 
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, Optional, List, Union
 import json
 from datetime import datetime
 
@@ -84,7 +84,7 @@ def error_response(
 
 
 def validation_error_response(
-    errors: List[Dict[str, str]]
+    errors: Union[str, List[Dict[str, str]]]
 ) -> Dict[str, Any]:
     """
     Create a validation error response.
@@ -96,11 +96,18 @@ def validation_error_response(
     Returns:
         Formatted API Gateway validation error response
     """
+    # Support both structured list of errors and a single message
+    details: Dict[str, Any]
+    if isinstance(errors, str):
+        details = {'errors': [{'message': errors}]}
+    else:
+        details = {'errors': errors}
+
     return error_response(
         message='Validation failed',
         status_code=422,
         error_code='VALIDATION_ERROR',
-        details={'errors': errors}
+        details=details
     )
 
 

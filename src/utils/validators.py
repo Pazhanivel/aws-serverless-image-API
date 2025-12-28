@@ -1,12 +1,11 @@
 """
 Input validation utilities for the image service.
-Provides validation functions for image files, metadata, and user input.
+Provides validation functions for image metadata and user input.
+Note: Since we use presigned URLs, files never go through Lambda, so no PIL/image validation needed.
 """
 
 import re
 from typing import List, Optional, Tuple
-from io import BytesIO
-from PIL import Image
 
 
 def validate_content_type(content_type: str, allowed_types: Optional[List[str]] = None) -> Tuple[bool, Optional[str]]:
@@ -57,62 +56,6 @@ def validate_file_size(size: int, max_size: Optional[int] = None) -> Tuple[bool,
         return False, f"File size ({current_mb:.2f} MB) exceeds maximum allowed size ({max_mb:.2f} MB)"
     
     return True, None
-
-
-def validate_image_file(file_content: bytes, content_type: str) -> Tuple[bool, Optional[str], Optional[dict]]:
-    """
-    Validate image file content and extract metadata.
-    
-    Args:
-        file_content: Raw file bytes
-        content_type: Declared MIME type
-    
-    Returns:
-        Tuple of (is_valid, error_message, metadata_dict)
-        metadata_dict contains: width, height, format, mode
-    """
-    # Validate content type
-    is_valid, error = validate_content_type(content_type)
-    if not is_valid:
-        return False, error, None
-    
-    # Validate file size
-    is_valid, error = validate_file_size(len(file_content))
-    if not is_valid:
-        return False, error, None
-    
-    # Try to open and validate image
-    try:
-        image = Image.open(BytesIO(file_content))
-        image.verify()  # Verify it's actually an image
-        
-        # Reopen to get metadata (verify() closes the file)
-        image = Image.open(BytesIO(file_content))
-        
-        metadata = {
-            'width': image.width,
-            'height': image.height,
-            'format': image.format,
-            'mode': image.mode
-        }
-        
-        # Validate image format matches content type
-        format_to_mime = {
-            'JPEG': 'image/jpeg',
-            'JPG': 'image/jpeg',
-            'PNG': 'image/png',
-            'GIF': 'image/gif',
-            'WEBP': 'image/webp'
-        }
-        
-        expected_mime = format_to_mime.get(image.format.upper())
-        if expected_mime and expected_mime.lower() != content_type.lower():
-            return False, f"Image format ({image.format}) does not match content type ({content_type})", None
-        
-        return True, None, metadata
-        
-    except Exception as e:
-        return False, f"Invalid image file: {str(e)}", None
 
 
 def validate_user_id(user_id: str) -> Tuple[bool, Optional[str]]:

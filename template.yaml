@@ -1,0 +1,177 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Instagram-like Image Service API
+  
+  Serverless image storage and management service with AWS Lambda, API Gateway, S3, and DynamoDB.
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 512
+    Runtime: python3.9
+    Environment:
+      Variables:
+        LOCALSTACK_ENDPOINT: http://host.docker.internal:4566
+        AWS_DEFAULT_REGION: us-east-1
+        S3_BUCKET_NAME: image-storage-bucket
+        DYNAMODB_TABLE_NAME: images
+        LOG_LEVEL: INFO
+        MAX_FILE_SIZE: '10485760'  # 10MB
+        USE_LOCALSTACK: 'true'
+
+Resources:
+  # API Gateway
+  ImageApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: dev
+      Cors:
+        AllowOrigin: "'*'"
+        AllowHeaders: "'Content-Type,Authorization,user-id,User-Id'"
+        AllowMethods: "'GET,POST,DELETE,OPTIONS'"
+        MaxAge: "'600'"
+      BinaryMediaTypes:
+        - 'multipart/form-data'
+        - 'image/*'
+
+  # Lambda Functions
+  
+  UploadFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: src.handlers.upload_handler.lambda_handler
+      Description: Generate presigned S3 URL for image upload
+      Policies:
+        - S3ReadPolicy:
+            BucketName: image-storage-bucket
+        - DynamoDBCrudPolicy:
+            TableName: images
+      Events:
+        UploadImage:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ImageApi
+            Path: /images
+            Method: POST
+
+  ListFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: src.handlers.list_handler.lambda_handler
+      Description: List images with filters and pagination
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: images
+      Events:
+        ListImages:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ImageApi
+            Path: /images
+            Method: GET
+
+  GetFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: src.handlers.get_handler.lambda_handler
+      Description: Get image metadata by ID
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: images
+      Events:
+        GetImage:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ImageApi
+            Path: /images/{image_id}
+            Method: GET
+
+  DownloadFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: src.handlers.download_handler.lambda_handler
+      Description: Generate presigned URL for image download
+      Policies:
+        - S3ReadPolicy:
+            BucketName: image-storage-bucket
+        - DynamoDBReadPolicy:
+            TableName: images
+      Events:
+        DownloadImage:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ImageApi
+            Path: /images/{image_id}/download
+            Method: GET
+
+  DeleteFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: src.handlers.delete_handler.lambda_handler
+      Description: Delete image (soft or hard delete)
+      Policies:
+        - S3CrudPolicy:
+            BucketName: image-storage-bucket
+        - DynamoDBCrudPolicy:
+            TableName: images
+      Events:
+        DeleteImage:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ImageApi
+            Path: /images/{image_id}
+            Method: DELETE
+
+  UpdateStatusFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: src.handlers.update_status_handler.lambda_handler
+      Description: Update image status after S3 upload
+      Policies:
+        - S3ReadPolicy:
+            BucketName: image-storage-bucket
+        - DynamoDBCrudPolicy:
+            TableName: images
+      Events:
+        UpdateStatus:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ImageApi
+            Path: /images/{image_id}
+            Method: PATCH
+
+Outputs:
+  ImageApiUrl:
+    Description: "API Gateway endpoint URL for dev stage"
+    Value: !Sub "https://${ImageApi}.execute-api.${AWS::Region}.amazonaws.com/dev"
+  
+  UploadFunctionArn:
+    Description: "Upload Lambda Function ARN"
+    Value: !GetAtt UploadFunction.Arn
+  
+  ListFunctionArn:
+    Description: "List Lambda Function ARN"
+    Value: !GetAtt ListFunction.Arn
+  
+  GetFunctionArn:
+    Description: "Get Lambda Function ARN"
+    Value: !GetAtt GetFunction.Arn
+  
+  DownloadFunctionArn:
+    Description: "Download Lambda Function ARN"
+    Value: !GetAtt DownloadFunction.Arn
+  
+  DeleteFunctionArn:
+    Description: "Delete Lambda Function ARN"
+    Value: !GetAtt DeleteFunction.Arn
+  
+  UpdateStatusFunctionArn:
+    Description: "Update Status Lambda Function ARN"
+    Value: !GetAtt UpdateStatusFunction.Arn

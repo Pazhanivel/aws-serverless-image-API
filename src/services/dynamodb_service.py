@@ -29,41 +29,33 @@ class DynamoDBService:
         
         # Get DynamoDB config
         dynamodb_config = self.settings.get_dynamodb_config()
-        self.table_name = dynamodb_config['table_name']
-        self.user_index = dynamodb_config['user_index']
-        self.status_index = dynamodb_config['status_index']
+        self.table_name = dynamodb_config.pop('table_name', self.settings.DYNAMODB_TABLE_NAME)
+        self.user_index = dynamodb_config.pop('user_index', self.settings.DYNAMODB_USER_INDEX)
+        self.status_index = dynamodb_config.pop('status_index', self.settings.DYNAMODB_STATUS_INDEX)
         
-        # Get AWS config
-        aws_config = self.settings.get_aws_config()
-        
-        # Create DynamoDB resource
-        dynamodb = boto3.resource(
-            'dynamodb',
-            endpoint_url=aws_config['endpoint_url'],
-            region_name=aws_config['region'],
-            aws_access_key_id=aws_config['access_key'],
-            aws_secret_access_key=aws_config['secret_key']
-        )
-        
+        # Create DynamoDB resource with remaining config (AWS credentials and endpoint)
+        dynamodb = boto3.resource('dynamodb', **dynamodb_config)
         self.table = dynamodb.Table(self.table_name)
         
         logger.info(f"DynamoDBService initialized with table: {self.table_name}")
     
-    def save_metadata(self, metadata: ImageMetadata) -> tuple[bool, Optional[str]]:
+    def save_metadata(self, metadata: ImageMetadata, skip_validation: bool = False) -> tuple[bool, Optional[str]]:
         """
         Save image metadata to DynamoDB.
         
         Args:
             metadata: ImageMetadata instance
+            skip_validation: Skip validation (useful for processing status with placeholder data)
         
         Returns:
             Tuple of (success, error_message)
         """
         try:
-            # Validate metadata
-            is_valid, error = metadata.validate()
-            if not is_valid:
-                return False, f"Invalid metadata: {error}"
+            # Validate metadata unless skipped
+            if not skip_validation:
+                is_valid, error = metadata.validate()
+                if not is_valid:
+                    return False, f"Invalid metadata: {error}"
             
             # Convert to DynamoDB format
             item = metadata.to_dynamodb()
@@ -136,7 +128,8 @@ class DynamoDBService:
             query_params = {
                 'IndexName': self.user_index,
                 'KeyConditionExpression': Key('user_id').eq(user_id),
-                'Limit': limit
+                'Limit': limit,
+                'ScanIndexForward': False  # Sort by upload_timestamp descending (newest first)
             }
             
             # Add status filter if provided
@@ -194,7 +187,8 @@ class DynamoDBService:
             query_params = {
                 'IndexName': self.user_index,
                 'KeyConditionExpression': Key('user_id').eq(user_id),
-                'Limit': limit
+                'Limit': limit,
+                'ScanIndexForward': False  # Sort by upload_timestamp descending (newest first)
             }
             
             # Build filter expression
@@ -317,7 +311,58 @@ class DynamoDBService:
         except Exception as e:
             error_msg = f"Unexpected error updating metadata: {str(e)}"
             logger.error(error_msg)
-            return False, None, error_msg
+            return False, [], None, error_msg
+    
+    def update_metadata(self, image_id: str, updates: Dict[str, Any]) -> tuple[bool, Optional[str]]:
+        """
+        Update image metadata fields.
+        
+        Args:
+            image_id: Image ID
+            updates: Dictionary of fields to update
+        
+        Returns:
+            Tuple of (success, error_message)
+        """
+        try:
+            # Build update expression
+            update_expr_parts = []
+            expr_attr_names = {}
+            expr_attr_values = {}
+            
+            for i, (key, value) in enumerate(updates.items()):
+                # Use attribute names to handle reserved keywords
+                attr_name = f"#attr{i}"
+                attr_value = f":val{i}"
+                
+                update_expr_parts.append(f"{attr_name} = {attr_value}")
+                expr_attr_names[attr_name] = key
+                expr_attr_values[attr_value] = value
+            
+            if not update_expr_parts:
+                return True, None  # Nothing to update
+            
+            update_expression = "SET " + ", ".join(update_expr_parts)
+            
+            # Perform update
+            self.table.update_item(
+                Key={'image_id': image_id},
+                UpdateExpression=update_expression,
+                ExpressionAttributeNames=expr_attr_names,
+                ExpressionAttributeValues=expr_attr_values
+            )
+            
+            logger.info(f"Successfully updated metadata for image: {image_id}")
+            return True, None
+            
+        except ClientError as e:
+            error_msg = f"Failed to update metadata: {str(e)}"
+            logger.error(error_msg)
+            return False, error_msg
+        except Exception as e:
+            error_msg = f"Unexpected error updating metadata: {str(e)}"
+            logger.error(error_msg)
+            return False, error_msg
     
     def delete_metadata(self, image_id: str) -> tuple[bool, Optional[str]]:
         """
@@ -444,14 +489,10 @@ class DynamoDBService:
             # Build keys
             keys = [{'image_id': image_id} for image_id in image_ids]
             
-            # Execute batch get
-            response = boto3.resource(
-                'dynamodb',
-                endpoint_url=self.settings.get_aws_config()['endpoint_url'],
-                region_name=self.settings.get_aws_config()['region'],
-                aws_access_key_id=self.settings.get_aws_config()['access_key'],
-                aws_secret_access_key=self.settings.get_aws_config()['secret_key']
-            ).batch_get_item(
+            # Execute batch get using DynamoDB client (resource doesn't expose batch_get_item)
+            aws_config = self.settings.get_aws_config()
+            dynamo_client = boto3.client('dynamodb', **aws_config)
+            response = dynamo_client.batch_get_item(
                 RequestItems={
                     self.table_name: {
                         'Keys': keys

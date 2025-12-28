@@ -7,6 +7,7 @@ This folder contains Python scripts for managing LocalStack and AWS resources.
 ### Resource Management (Python)
 
 - **create_resources.py** - Create S3 bucket and DynamoDB table
+- **deploy_stack.py** - Deploy Lambda functions and API Gateway
 - **verify_resources.py** - Verify all resources are created correctly
 - **cleanup_resources.py** - Delete all resources from LocalStack
 
@@ -20,14 +21,20 @@ This folder contains Python scripts for managing LocalStack and AWS resources.
 ### First Time Setup
 
 ```cmd
-REM 1. Start LocalStack
+REM 1. Start LocalStack (automatically creates resources and deploys stack)
 scripts\start_localstack.bat
 
-REM 2. Create resources
-python scripts\create_resources.py
-
-REM 3. Verify setup
+REM 2. Verify setup
 python scripts\verify_resources.py
+```
+
+### Manual Deployment
+
+If you need to redeploy the Lambda functions and API Gateway:
+
+```cmd
+REM Deploy/update stack
+python scripts\deploy_stack.py
 ```
 
 ### Daily Development
@@ -52,24 +59,41 @@ scripts\stop_localstack.bat
 ## Prerequisites
 
 - Python 3.7+ with boto3 installed (`pip install boto3`)
-- LocalStack CLI installed (`pip install localstack`)
 - Docker Desktop running
+- Docker Compose (included with Docker Desktop)
 
 ## Environment Variables
 
 All scripts support these environment variables:
-
-- `LOCALSTACK_ENDPOINT` - Default: http://localhost:4566
-- `AWS_DEFAULT_REGION` - Default: us-east-1
-- `S3_BUCKET_NAME` - Default: image-storage-bucket
-- `DYNAMODB_TABLE_NAME` - Default: images
-
 ## Resources Created
 
 ### S3 Bucket
 - **Name**: image-storage-bucket
 - **Purpose**: Store uploaded image files
 
+### DynamoDB Table
+- **Name**: images
+- **Primary Key**: image_id (String)
+- **GSIs**: 
+  - UserIndex (user_id + upload_timestamp)
+  - StatusIndex (status + upload_timestamp)
+
+### Lambda Functions
+- **image-api-upload** - Generate presigned S3 upload URLs
+- **image-api-list** - List images with filtering and pagination
+- **image-api-get** - Get image metadata by ID
+- **image-api-download** - Generate presigned download URLs
+- **image-api-delete** - Delete images (soft/hard)
+
+### API Gateway
+- **Name**: image-api
+- **Stage**: dev
+- **Endpoints**:
+  - `POST /images` - Upload image (get presigned URL)
+  - `GET /images` - List images
+  - `GET /images/{image_id}` - Get image metadata
+  - `GET /images/{image_id}/download` - Download image
+  - `DELETE /images/{image_id}` - Delete image
 ### DynamoDB Table
 - **Name**: images
 - **Primary Key**: image_id (String)

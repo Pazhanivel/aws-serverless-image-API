@@ -1,11 +1,10 @@
 """
 ImageService orchestration layer.
-Coordinates S3 and DynamoDB operations with image processing.
+Coordinates S3 and DynamoDB operations.
+Note: With presigned URLs, files never go through Lambda, so no image processing needed.
 """
 
 from typing import Optional, List, Dict, Any, Tuple
-from io import BytesIO
-from PIL import Image
 
 from src.config.settings import Settings
 from src.models.image_metadata import ImageMetadata
@@ -13,7 +12,6 @@ from src.services.s3_service import S3Service
 from src.services.dynamodb_service import DynamoDBService
 from src.utils.logger import get_logger
 from src.utils.validators import (
-    validate_image_file,
     validate_content_type,
     validate_file_size,
     validate_user_id,
@@ -45,130 +43,13 @@ class ImageService:
         
         logger.info("ImageService initialized")
     
-    def upload_image(
-        self,
-        file_content: bytes,
-        user_id: str,
-        filename: str,
-        content_type: str,
-        tags: Optional[List[str]] = None,
-        description: Optional[str] = None
-    ) -> tuple[bool, Optional[ImageMetadata], Optional[str]]:
-        """
-        Upload image with full validation and metadata storage.
-        Implements transaction-like rollback on failure.
-        
-        Args:
-            file_content: Image file content
-            user_id: User ID
-            filename: Original filename
-            content_type: MIME type
-            tags: Optional tags
-            description: Optional description
-        
-        Returns:
-            Tuple of (success, metadata, error_message)
-        """
-        s3_key = None
-        
-        try:
-            # Step 1: Validate inputs
-            logger.info(f"Starting upload for user: {user_id}, file: {filename}")
-            
-            # Validate user_id
-            is_valid, error = validate_user_id(user_id)
-            if not is_valid:
-                return False, None, f"Invalid user_id: {error}"
-            
-            # Validate content type
-            is_valid, error = validate_content_type(content_type)
-            if not is_valid:
-                return False, None, f"Invalid content_type: {error}"
-            
-            # Validate file size
-            is_valid, error = validate_file_size(len(file_content))
-            if not is_valid:
-                return False, None, f"Invalid file size: {error}"
-            
-            # Validate tags
-            if tags:
-                is_valid, error = validate_tags(tags)
-                if not is_valid:
-                    return False, None, f"Invalid tags: {error}"
-            
-            # Validate description
-            if description:
-                is_valid, error = validate_description(description)
-                if not is_valid:
-                    return False, None, f"Invalid description: {error}"
-            
-            # Sanitize filename
-            safe_filename = sanitize_filename(filename)
-            
-            # Step 2: Validate image and extract metadata
-            is_valid, image_info, error = validate_image_file(file_content)
-            if not is_valid:
-                return False, None, f"Invalid image file: {error}"
-            
-            width = image_info.get('width')
-            height = image_info.get('height')
-            image_format = image_info.get('format')
-            
-            logger.info(f"Image validated: {width}x{height}, format: {image_format}")
-            
-            # Step 3: Upload to S3
-            success, s3_key, error = self.s3_service.upload_image(
-                file_content=file_content,
-                user_id=user_id,
-                filename=safe_filename,
-                content_type=content_type,
-                metadata={
-                    'width': str(width) if width else '',
-                    'height': str(height) if height else '',
-                    'format': image_format or ''
-                }
-            )
-            
-            if not success:
-                return False, None, f"Failed to upload to S3: {error}"
-            
-            logger.info(f"Successfully uploaded to S3: {s3_key}")
-            
-            # Step 4: Create metadata
-            metadata = ImageMetadata.create(
-                user_id=user_id,
-                filename=safe_filename,
-                content_type=content_type,
-                size=len(file_content),
-                s3_key=s3_key,
-                s3_bucket=self.s3_service.bucket_name,
-                tags=tags,
-                description=description,
-                width=width,
-                height=height,
-                metadata={'format': image_format} if image_format else None
-            )
-            
-            # Step 5: Save metadata to DynamoDB
-            success, error = self.dynamodb_service.save_metadata(metadata)
-            if not success:
-                # Rollback: Delete from S3
-                logger.error(f"Failed to save metadata, rolling back S3 upload: {error}")
-                self.s3_service.delete_image(s3_key)
-                return False, None, f"Failed to save metadata: {error}"
-            
-            logger.info(f"Successfully completed upload for image: {metadata.image_id}")
-            return True, metadata, None
-            
-        except Exception as e:
-            # Rollback: Delete from S3 if upload succeeded
-            if s3_key:
-                logger.error(f"Unexpected error, rolling back S3 upload: {str(e)}")
-                self.s3_service.delete_image(s3_key)
-            
-            error_msg = f"Unexpected error during upload: {str(e)}"
-            logger.error(error_msg)
-            return False, None, error_msg
+    # NOTE: upload_image method is NOT USED with presigned URL approach
+    # Files are uploaded directly to S3 from client, Lambda only generates presigned URLs
+    # Keeping this method commented out for reference/future use
+    #
+    # def upload_image(self, file_content: bytes, ...):
+    #     """Legacy method - not used with presigned URLs"""
+    #     pass
     
     def get_image(
         self,
@@ -444,7 +325,7 @@ class ImageService:
             
             if soft_delete:
                 # Soft delete: Update status
-                success, _, error = self.dynamodb_service.update_metadata(
+                success, error = self.dynamodb_service.update_metadata(
                     image_id=image_id,
                     updates={'status': 'deleted'}
                 )

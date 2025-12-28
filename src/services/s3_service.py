@@ -28,21 +28,12 @@ class S3Service:
         
         # Get S3 config
         s3_config = self.settings.get_s3_config()
-        self.bucket_name = s3_config['bucket_name']
-        self.key_prefix = s3_config['key_prefix']
-        self.presigned_url_expiry = s3_config['presigned_url_expiry']
+        self.bucket_name = s3_config.pop('bucket_name', self.settings.S3_BUCKET_NAME)
+        self.key_prefix = s3_config.pop('key_prefix', '')
+        self.presigned_url_expiry = s3_config.pop('presigned_url_expiry', self.settings.S3_PRESIGNED_URL_EXPIRATION)
         
-        # Get AWS config
-        aws_config = self.settings.get_aws_config()
-        
-        # Create S3 client
-        self.s3_client = boto3.client(
-            's3',
-            endpoint_url=aws_config['endpoint_url'],
-            region_name=aws_config['region'],
-            aws_access_key_id=aws_config['access_key'],
-            aws_secret_access_key=aws_config['secret_key']
-        )
+        # Create S3 client with remaining config (AWS credentials and endpoint)
+        self.s3_client = boto3.client('s3', **s3_config)
         
         logger.info(f"S3Service initialized with bucket: {self.bucket_name}")
     
@@ -258,6 +249,38 @@ class S3Service:
             error_msg = f"Unexpected error checking image existence: {str(e)}"
             logger.error(error_msg)
             return False, False, error_msg
+    
+    def check_object_exists(self, bucket: str, s3_key: str) -> tuple[bool, Optional[int], Optional[str]]:
+        """
+        Check if object exists in S3 and return its size.
+        
+        Args:
+            bucket: S3 bucket name
+            s3_key: S3 object key
+        
+        Returns:
+            Tuple of (exists, size_in_bytes, error_message)
+        """
+        try:
+            response = self.s3_client.head_object(
+                Bucket=bucket,
+                Key=s3_key
+            )
+            size = response.get('ContentLength', 0)
+            return True, size, None
+            
+        except ClientError as e:
+            if e.response['Error']['Code'] == '404':
+                return False, None, None
+            
+            error_msg = f"Error checking object existence: {str(e)}"
+            logger.error(error_msg)
+            return False, None, error_msg
+            
+        except Exception as e:
+            error_msg = f"Unexpected error checking object existence: {str(e)}"
+            logger.error(error_msg)
+            return False, None, error_msg
     
     def get_image_content(self, s3_key: str) -> tuple[bool, Optional[bytes], Optional[str], Optional[str]]:
         """

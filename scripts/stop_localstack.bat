@@ -1,44 +1,21 @@
 @echo off
-REM Batch script to stop LocalStack using LocalStack CLI
-
-echo.
-echo ========================================
-echo Stopping LocalStack...
-echo ========================================
-echo.
-
-REM Check if LocalStack CLI is installed
-localstack --version >nul 2>&1
-if %errorlevel% neq 0 (
-    echo [ERROR] LocalStack CLI is not installed.
-    echo Install it with: pip install localstack
-    pause
-    exit /b 1
-)
-
-REM Check if LocalStack is running
-localstack status >nul 2>&1
-if %errorlevel% neq 0 (
-    echo [INFO] LocalStack is not running
-    pause
-    exit /b 0
-)
+REM Stop LocalStack using Docker Compose
 
 echo Stopping LocalStack...
-localstack stop
+
+REM Navigate to project root
+cd /d "%~dp0\.."
+
+REM Stop LocalStack services
+docker-compose down
 
 if %errorlevel% equ 0 (
-    echo [SUCCESS] LocalStack stopped
+    echo.
+    echo LocalStack stopped successfully!
+    echo.
+    echo To remove volumes and data, run: docker-compose down -v
 ) else (
-    echo [ERROR] Failed to stop LocalStack
-    pause
+    echo.
+    echo ERROR: Failed to stop LocalStack.
     exit /b 1
 )
-
-echo.
-echo ========================================
-echo LocalStack Stopped!
-echo ========================================
-echo.
-
-pause
